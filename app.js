@@ -1,10 +1,14 @@
 require('dotenv').config()
 
+const logger = require('morgan')
 const express = require('express')
+const bodyParser = require('body-parser')
 const app = express()
 
 const Prismic = require('@prismicio/client');
 const PrismicDOM = require('prismic-dom');
+
+
 
 const initApi = req => {
   return Prismic.getApi(process.env.PRISMIC_ENDPOINT, {
@@ -25,6 +29,9 @@ function handleLinkResolver(doc) {
   // Default to homepage
   return '/';
 }
+app.use(logger('dev'))
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: false}))
 
 // Middleware to inject prismic context
 app.use((req, res, next) => {
@@ -42,36 +49,42 @@ const port = 3000
 app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'pug')
 
-app.get('/', (req, res) => {
-  initApi(req).then(api => {
-    api.query([
-      Prismic.Predicates.any('document.type', ['meta','home']),
-      ]).then(response => {
-      const { results } = response
-     const [meta,home] = results
-     console.log(home.data.title)
+const handleResquest = async api => {
+  const meta = await api.getSingle('meta')
+  const preloader = await api.getSingle('preloader')
+  const navigation = await api.getSingle('navigation')
+
+      return {
+        meta,
+        navigation,
+        preloader
+      }
+}
+
+app.get('/', async(req, res) => {
+  const api = await initApi(req)
+  const defaults = await handleResquest(api)
+    const home = await api.getSingle('home')
       res.render('pages/home', {
-        meta,home
+        ...defaults,
+        home
         
         });
-    });
-  });})
+    
+  })
 
-app.get('/about', async (req, res) => {
+app.get('/about', async(req, res) => {
 
-    initApi(req).then(api => {
-      api.query([
-        Prismic.Predicates.any('document.type', ['meta','about']),
-        ]).then(response => {
-        const { results } = response
-       const [meta,about] = results
-       console.log(meta,about)
+      const api = await initApi(req)
+      const defaults = await handleResquest(api)
+      const about = await api.getSingle('about')
+
+      //  console.log(about.data.body)
         res.render('pages/about', {
-          meta,about
+         ...defaults,
+          about,
           
           });
-      });
-    });
 })
 
 
